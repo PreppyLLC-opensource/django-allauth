@@ -11,6 +11,8 @@ from django.contrib.sites.models import Site
 from django.utils.encoding import python_2_unicode_compatible
 from django.utils.crypto import get_random_string
 
+from dbmail import send_db_mail
+
 from ..utils import build_absolute_uri
 from .. import app_settings as allauth_app_settings
 from . import app_settings
@@ -129,13 +131,7 @@ class EmailConfirmation(models.Model):
             "current_site": current_site,
             "key": self.key,
         }
-        if signup:
-            email_template = 'account/email/email_confirmation_signup'
-        else:
-            email_template = 'account/email/email_confirmation'
-        get_adapter().send_mail(email_template,
-                                self.email_address.email,
-                                ctx)
+        send_db_mail('email-confirmation', self.email_address.email, ctx)
         self.sent = timezone.now()
         self.save()
         signals.email_confirmation_sent.send(sender=self.__class__,

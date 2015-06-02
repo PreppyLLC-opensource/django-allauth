@@ -10,6 +10,8 @@ from django.utils.translation import pgettext, ugettext_lazy as _, ugettext
 from django.contrib.auth import authenticate
 from django.contrib.auth.tokens import default_token_generator
 
+from dbmail import send_db_mail
+
 from ..utils import (email_address_exists,
                      set_form_field_order,
                      build_absolute_uri,
@@ -399,7 +401,7 @@ class ResetPasswordForm(forms.Form):
     email = forms.EmailField(
         label=_("E-mail"),
         required=True,
-        widget=forms.TextInput(attrs={"type": "email", "size": "30"}))
+        widget=forms.TextInput(attrs={"type": "email", "size": "30", 'placeholder': _('E-mail')}))
 
     def clean_email(self):
         email = self.cleaned_data["email"]
@@ -439,9 +441,7 @@ class ResetPasswordForm(forms.Form):
             if app_settings.AUTHENTICATION_METHOD \
                     != AuthenticationMethod.EMAIL:
                 context['username'] = user_username(user)
-            get_adapter().send_mail('account/email/password_reset_key',
-                                    email,
-                                    context)
+            send_db_mail('password-reset', email, context)
         return self.cleaned_data["email"]
 
 
