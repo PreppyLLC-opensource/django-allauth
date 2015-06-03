@@ -22,7 +22,6 @@ def migrate_socialaccounts(apps, schema_editor):
             uid=old_acc.uid,
             extra_data=old_acc.extra_data,
         )
-    UserSocialAuth.objects.all().delete()
 
 
 class Migration(migrations.Migration):
