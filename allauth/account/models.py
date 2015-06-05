@@ -122,9 +122,13 @@ class EmailConfirmation(models.Model):
         current_site = kwargs["site"] if "site" in kwargs \
             else Site.objects.get_current()
         activate_url = reverse("account_confirm_email", args=[self.key])
-        activate_url = build_absolute_uri(request,
-                                          activate_url,
-                                          protocol=app_settings.DEFAULT_HTTP_PROTOCOL)
+        if request is not None:
+            activate_url = build_absolute_uri(request,
+                                              activate_url,
+                                              protocol=app_settings.DEFAULT_HTTP_PROTOCOL)
+        else:
+            activate_url = 'http://%s%s' % (current_site.domain, activate_url)
+
         ctx = {
             "user": self.email_address.user,
             "activate_url": activate_url,
