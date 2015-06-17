@@ -7,9 +7,12 @@ from django.db import models
 from django.db import transaction
 from django.utils.translation import ugettext_lazy as _
 from django.utils import timezone
-from django.contrib.sites.models import Site
+from django.contrib.sites.models import Site, RequestSite
 from django.utils.encoding import python_2_unicode_compatible
 from django.utils.crypto import get_random_string
+from django.template.loader import render_to_string
+from django.contrib.staticfiles import finders
+from django.conf import settings
 
 from dbmail import send_db_mail
 
@@ -119,6 +122,12 @@ class EmailConfirmation(models.Model):
             return email_address
 
     def send(self, request, signup=False, **kwargs):
+        if settings.USE_DB_MAIL_FOR_ALLAUTH:
+            self.send_mail_with_db_mail(request, **kwargs)
+        else:
+            self.send_mail_old_version(request)
+
+    def send_mail_with_db_mail(self, request, **kwargs):
         current_site = kwargs["site"] if "site" in kwargs \
             else Site.objects.get_current()
         activate_url = reverse("account_confirm_email", args=[self.key])
@@ -133,6 +142,7 @@ class EmailConfirmation(models.Model):
             "user": self.email_address.user,
             "activate_url": activate_url,
             "current_site": current_site,
+            'expiration_days': app_settings.EMAIL_CONFIRMATION_EXPIRE_DAYS,
             "key": self.key,
         }
         send_db_mail('email-confirmation', self.email_address.email, ctx)
@@ -140,3 +150,26 @@ class EmailConfirmation(models.Model):
         self.save()
         signals.email_confirmation_sent.send(sender=self.__class__,
                                              confirmation=self)
+
+    def send_mail_old_version(self, request):
+        if Site._meta.installed:
+            site = Site.objects.get_current()
+        else:
+            site = RequestSite(request)
+        ctx_dict = {
+            'activation_key': self.key,
+            'expiration_days': app_settings.EMAIL_CONFIRMATION_EXPIRE_DAYS,
+            'site': site
+        }
+        subject = render_to_string('registration/activation_email_subject.txt',
+                                   ctx_dict)
+        # Email subject *must not* contain newlines
+        subject = ''.join(subject.splitlines())
+        template = 'registration/activation_email.txt'
+        images = [[finders.find(y[1]), y[0]] for y in [x.split('=') for x in open(
+            'apps/main/templates/registration/activation_email_images.txt', 'rb').read().split('\n') if x != '']]
+
+        self.email_address.user.email_user(subject, ctx_dict, template, images,
+                                           getattr(settings, 'DEFAULT_REGISTRATION_EMAIL'))
+        self.sent = timezone.now()
+        self.save()
